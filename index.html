@@ -1,0 +1,1287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>APIx — Real-time Airfare Price Index</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#f6f6f4;
+    --surface:#ffffff;
+    --ink:#15181d;
+    --ink-2:#464c55;
+    --ink-3:#767d87;
+    --line:#e3e3df;
+    --line-2:#cfcfca;
+    --accent:#2f5fd0;
+    --accent-soft:#e9f0fe;
+    --accent-ink:#1d4499;
+    --warn:#b4632a;
+    --term-bg:#191c22;
+    --term-ink:#c9d1d9;
+    --radius:14px;
+    --maxw:1240px;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  }
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:19px;line-height:1.55;-webkit-font-smoothing:antialiased;
+  }
+
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 32px}
+  section{padding:88px 0;border-top:1px solid var(--line)}
+  section:first-of-type{border-top:0}
+
+  .eyebrow{
+    font-size:15px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--ink-3);font-weight:700;margin:0 0 14px;
+  }
+  h1{font-size:clamp(40px,5.6vw,64px);line-height:1.08;letter-spacing:-.025em;margin:0 0 18px;font-weight:660}
+  h2{font-size:clamp(30px,3.6vw,44px);line-height:1.14;letter-spacing:-.02em;margin:0 0 14px;font-weight:650}
+  h3{font-size:22px;line-height:1.25;margin:0 0 6px;font-weight:640;letter-spacing:-.01em}
+  p{margin:0 0 16px;color:var(--ink-2);max-width:62ch}
+  .lede{font-size:24px;line-height:1.4;color:var(--ink-2)}
+  .muted{color:var(--ink-3)}
+  .small{font-size:16px}
+  .tiny{font-size:14px}
+  b,strong{font-weight:650;color:var(--ink)}
+
+  .chip{
+    display:inline-flex;align-items:center;gap:9px;
+    font-size:15px;font-weight:650;padding:8px 16px;border-radius:100px;
+    background:#fff;border:1px solid var(--line-2);color:var(--ink-2);
+  }
+  .chip .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex:0 0 auto}
+
+  /* ---------- HERO ---------- */
+  .hero{padding-top:72px}
+  .hero-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:56px;align-items:center}
+  .index-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:34px 36px}
+  .index-label{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);font-weight:700}
+  .index-value{
+    font-size:clamp(76px,11vw,112px);line-height:1;font-weight:620;letter-spacing:-.04em;
+    font-variant-numeric:tabular-nums;margin:12px 0 0;
+  }
+  .index-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px}
+  .delta{
+    display:inline-flex;align-items:center;gap:7px;font-size:17px;font-weight:680;
+    padding:6px 14px;border-radius:100px;background:var(--accent-soft);color:var(--accent-ink);
+  }
+  .index-meta{font-size:16px;color:var(--ink-3)}
+  .index-base{border-top:1px solid var(--line);margin-top:22px;padding-top:16px;font-size:16px;color:var(--ink-3)}
+
+  /* ---------- PROBLEM ---------- */
+  .compare{
+    display:grid;grid-template-columns:1fr 1fr;gap:28px;margin:38px 0 32px;
+  }
+  .cmp-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:26px 28px}
+  .cmp-card.is-gap{border-color:var(--line-2)}
+  .cmp-head{display:flex;align-items:baseline;justify-content:space-between;gap:14px;margin-bottom:6px;flex-wrap:wrap}
+  .cmp-head .t{font-size:21px;font-weight:650}
+  .cmp-head .v{font-size:17px;font-weight:680;color:var(--accent-ink)}
+  .cmp-head .v.grey{color:var(--ink-3)}
+  .cmp-card svg{display:block;width:100%;height:auto;margin-top:14px}
+  .cmp-note{font-size:17px;color:var(--ink-3);margin:12px 0 0}
+
+  .why{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:8px}
+  .why-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:28px}
+  .why-icon{
+    width:56px;height:56px;border-radius:14px;background:var(--accent-soft);color:var(--accent-ink);
+    display:flex;align-items:center;justify-content:center;margin-bottom:16px;
+  }
+  .why-card p{margin:0;font-size:18px}
+
+  .callout{
+    margin-top:32px;background:var(--accent-soft);border:1px solid #cddcfa;border-radius:var(--radius);
+    padding:26px 30px;font-size:23px;line-height:1.4;color:var(--accent-ink);font-weight:600;max-width:none;
+  }
+
+  /* ---------- PIPELINE ---------- */
+  .pipeline{display:flex;align-items:flex-start;justify-content:space-between;margin:44px 0 0}
+  .node{
+    flex:0 0 auto;width:170px;
+    background:var(--surface);border:2px solid var(--line);border-radius:16px;
+    padding:22px 14px;text-align:center;cursor:pointer;font:inherit;color:inherit;
+    transition:border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+  }
+  .node:hover{border-color:var(--line-2);transform:translateY(-3px)}
+  .node:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+  .node[aria-expanded="true"]{border-color:var(--accent);box-shadow:0 0 0 5px var(--accent-soft)}
+  .node .glyph{display:block;margin:0 auto 14px;color:var(--accent)}
+  .node .n-title{display:block;font-size:19px;font-weight:660;line-height:1.2;letter-spacing:-.01em}
+  .node .n-sub{display:block;font-size:14px;color:var(--ink-3);margin-top:6px;line-height:1.3}
+
+  .link{position:relative;flex:1 1 auto;height:4px;background:var(--line-2);margin-top:62px;min-width:22px;border-radius:4px}
+  .link .pk{
+    position:absolute;top:-4px;left:0;width:12px;height:12px;border-radius:50%;
+    background:var(--accent);animation:flowX 2.6s linear infinite;
+  }
+  @keyframes flowX{
+    0%{left:0;opacity:0} 12%{opacity:1} 88%{opacity:1} 100%{left:calc(100% - 12px);opacity:0}
+  }
+
+  .stage-detail{
+    margin-top:30px;background:var(--surface);border:1px solid var(--line);
+    border-left:6px solid var(--accent);border-radius:var(--radius);padding:26px 30px;
+  }
+  .stage-detail h3{font-size:24px;margin-bottom:8px}
+  .stage-detail p{margin:0;font-size:21px;line-height:1.45;max-width:80ch}
+  .stage-hint{font-size:16px;color:var(--ink-3);margin-top:18px}
+  .carriers{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
+  .carrier{
+    display:inline-flex;align-items:center;gap:8px;font-size:16px;font-weight:600;
+    background:var(--bg);border:1px solid var(--line);border-radius:100px;padding:8px 16px 8px 12px;color:var(--ink-2);
+  }
+  .carrier svg{color:var(--ink-3);flex:0 0 auto}
+
+  /* ---------- COLLECTION ---------- */
+  .sim-grid{display:grid;grid-template-columns:1.45fr 1fr;gap:28px;margin-top:34px;align-items:start}
+  .terminal{background:var(--term-bg);border-radius:var(--radius);border:1px solid #2b3038;overflow:hidden}
+  .term-bar{
+    display:flex;align-items:center;gap:9px;padding:12px 18px;border-bottom:1px solid #2b3038;
+    color:#8b949e;font-size:15px;font-family:var(--mono);
+  }
+  .term-bar .tdot{width:11px;height:11px;border-radius:50%;background:#3a4049;flex:0 0 auto}
+  .term-body{
+    padding:16px 18px;height:322px;overflow:hidden;font-family:var(--mono);font-size:16px;line-height:2;
+    color:var(--term-ink);display:flex;flex-direction:column;justify-content:flex-end;
+  }
+  .term-body div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;animation:lineIn .35s ease both}
+  @keyframes lineIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+  .t-time{color:#6e7681}.t-route{color:#e6edf3}.t-carrier{color:#a5b4c4}
+  .t-price{color:#7fd1a8}.t-ok{color:#7fd1a8}.t-warn{color:#d9b26a}.t-skip{color:#8b949e}
+
+  .stat-stack{display:flex;flex-direction:column;gap:18px}
+  .stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:22px 24px}
+  .stat .k{font-size:15px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);font-weight:700}
+  .stat .v{font-size:44px;font-weight:640;letter-spacing:-.03em;font-variant-numeric:tabular-nums;margin:6px 0 2px;line-height:1.05}
+  .stat .sub{font-size:16px;color:var(--ink-3);line-height:1.45}
+  .bar{height:8px;background:var(--line);border-radius:100px;overflow:hidden;margin-top:16px}
+  .bar span{display:block;height:100%;background:var(--accent);border-radius:100px;width:0;transition:width .9s ease}
+
+  /* ---------- DASHBOARD ---------- */
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:26px 28px}
+  .panel-head{display:flex;justify-content:space-between;align-items:baseline;gap:18px;margin-bottom:18px;flex-wrap:wrap}
+  .panel-head h3{margin:0;font-size:21px}
+  .panel-head .note{font-size:16px;color:var(--ink-3)}
+  .srckey{display:flex;gap:18px;flex-wrap:wrap;font-size:16px;color:var(--ink-3);align-items:center}
+  .srckey span{display:inline-flex;align-items:center;gap:8px}
+  .srckey i{display:block;width:26px;height:0;border-top:3px solid var(--accent);border-radius:3px}
+  .srckey i.dash{border-top-style:dashed;border-color:var(--ink-3)}
+  .chart-box{position:relative;height:320px}
+  .chart-box.short{height:262px}
+  .dash-row{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px;align-items:start}
+
+  .heat-scroll{overflow-x:auto}
+  table.heat{border-collapse:separate;border-spacing:5px;width:100%;font-size:16px;min-width:460px}
+  table.heat th{font-weight:650;color:var(--ink-3);font-size:15px;padding:2px 4px;text-align:center;white-space:nowrap}
+  table.heat th.rowh{text-align:left;font-size:17px;color:var(--ink-2);white-space:nowrap}
+  table.heat td{height:44px;border-radius:8px;text-align:center;font-variant-numeric:tabular-nums;font-weight:620}
+  .legend{display:flex;align-items:center;gap:10px;margin-top:18px;font-size:16px;color:var(--ink-3)}
+  .legend .sw{display:flex;gap:4px}
+  .legend .sw i{width:28px;height:12px;border-radius:3px;display:block}
+
+  /* ---------- API ---------- */
+  .endpoint{
+    display:inline-flex;align-items:center;gap:12px;font-family:var(--mono);font-size:19px;
+    background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 16px;margin-bottom:18px;
+  }
+  .endpoint .verb{background:var(--accent-soft);color:var(--accent-ink);font-weight:750;border-radius:6px;padding:2px 10px;font-size:16px}
+  pre.code{
+    margin:0;background:var(--term-bg);color:var(--term-ink);border-radius:var(--radius);
+    padding:26px 28px;overflow-x:auto;font-family:var(--mono);font-size:17px;line-height:1.75;border:1px solid #2b3038;
+  }
+  .k-key{color:#8fb3f5}.k-str{color:#9ecf9e}.k-num{color:#e2c08d}.k-punc{color:#8b949e}
+
+  /* ---------- STACK ---------- */
+  .stack-group{margin-top:38px}
+  .stack-group > h3{
+    font-size:16px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);
+    font-weight:700;margin:0 0 16px;
+  }
+  .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+  .tile{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:22px;display:flex;gap:16px;align-items:flex-start;
+  }
+  .tile .mark{
+    width:54px;height:54px;border-radius:13px;flex:0 0 auto;color:#fff;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .tile .brandmark{stroke:none}
+  .tile .nm{font-size:19px;font-weight:660;line-height:1.2;letter-spacing:-.01em}
+  .tile .rl{font-size:16px;color:var(--ink-3);margin-top:5px;line-height:1.35}
+
+  /* ---------- COMPLIANCE ---------- */
+  .rules{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;margin-top:36px}
+  .rule{display:flex;gap:18px;align-items:flex-start;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:26px}
+  .rule .ic{
+    width:54px;height:54px;border-radius:13px;flex:0 0 auto;background:var(--accent-soft);color:var(--accent-ink);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .rule p{margin:0;font-size:18px}
+
+  .formula{
+    margin-top:36px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:28px 30px;
+  }
+  .formula .f{
+    font-family:var(--mono);font-size:clamp(18px,2.2vw,26px);color:var(--ink);
+    overflow-x:auto;padding-bottom:6px;white-space:nowrap;
+  }
+  .formula .lg{display:flex;flex-wrap:wrap;gap:22px;margin-top:18px;font-size:16px;color:var(--ink-3)}
+  .formula .lg b{font-family:var(--mono);color:var(--accent-ink);font-weight:700}
+
+  footer{border-top:1px solid var(--line);padding:34px 0 60px}
+  footer p{font-size:16px;color:var(--ink-3);max-width:92ch;margin:0}
+
+  .reveal{opacity:0;transform:translateY(12px);transition:opacity .5s ease,transform .5s ease}
+  .reveal.in{opacity:1;transform:none}
+
+  @media (max-width:1180px){
+    .node{width:150px;padding:18px 10px}
+    .node .n-title{font-size:17px}
+    .tiles{grid-template-columns:repeat(3,1fr)}
+  }
+  @media (max-width:1000px){
+    body{font-size:18px}
+    section{padding:64px 0}
+    .hero-grid,.compare,.dash-row,.sim-grid{grid-template-columns:1fr}
+    .why,.rules{grid-template-columns:1fr}
+    .tiles{grid-template-columns:repeat(2,1fr)}
+    .pipeline{flex-direction:column;align-items:stretch}
+    .node{width:100%;display:flex;align-items:center;gap:16px;text-align:left;padding:16px 20px}
+    .node .glyph{margin:0}
+    .link{width:4px;height:32px;flex:0 0 auto;margin:0 0 0 38px}
+    .link .pk{left:-4px;top:0;animation-name:flowY}
+    @keyframes flowY{
+      0%{top:0;opacity:0} 12%{opacity:1} 88%{opacity:1} 100%{top:calc(100% - 12px);opacity:0}
+    }
+  }
+  @media (max-width:620px){ .tiles{grid-template-columns:1fr} }
+
+  @media (prefers-reduced-motion: reduce){
+    html{scroll-behavior:auto}
+    .link .pk{animation:none;opacity:.7;left:calc(50% - 6px);top:-4px}
+    .term-body div{animation:none}
+    .reveal{opacity:1;transform:none;transition:none}
+    .node,.bar span{transition:none}
+  }
+
+  /* ================= MOTION LAYER ================= */
+
+  /* scroll progress */
+  .sp{position:fixed;top:0;left:0;right:0;height:4px;z-index:60;pointer-events:none;background:transparent}
+  .sp span{display:block;height:100%;width:0;background:var(--accent);transition:width .1s linear}
+
+  /* hero entrance */
+  @keyframes heroIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+  .hero .chip,.hero h1,.hero .lede,.hero .index-card{animation:heroIn .75s cubic-bezier(.2,.7,.3,1) both}
+  .hero h1{animation-delay:.08s}
+  .hero .lede{animation-delay:.16s}
+  .hero .index-card{animation-delay:.22s}
+
+  /* route ribbon */
+  .ribbon-card{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:22px 26px 12px;overflow:hidden;animation:heroIn .75s cubic-bezier(.2,.7,.3,1) both;animation-delay:.3s;
+  }
+  .ribbon-head{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap}
+  .ribbon-title{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);font-weight:700}
+  .ribbon-sub{font-size:16px;color:var(--ink-3)}
+  #routeCanvas{display:block;width:100%;height:230px}
+
+  /* pipeline node pulse */
+  .node{position:relative}
+  .node::after{
+    content:"";position:absolute;inset:-3px;border-radius:18px;border:2.5px solid var(--accent);
+    opacity:0;pointer-events:none;
+  }
+  .node.pulsing::after{animation:nodePulse .66s ease-out}
+  @keyframes nodePulse{0%{opacity:.95;transform:scale(1)}100%{opacity:0;transform:scale(1.07)}}
+
+  /* draw-on line graphics */
+  .draw{transition:stroke-dashoffset 1.9s cubic-bezier(.33,0,.18,1)}
+  .pop{opacity:0;transform:scale(.3);transform-box:fill-box;transform-origin:center;
+       transition:opacity .45s ease,transform .5s cubic-bezier(.2,1.5,.4,1)}
+  .drawin.in .pop{opacity:1;transform:scale(1)}
+
+  /* live feed dot */
+  .livedot{width:9px;height:9px;border-radius:50%;background:#d9b26a;margin-left:auto;flex:0 0 auto;
+           animation:blip 1.7s ease-in-out infinite}
+  .livelabel{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:#8b949e}
+  @keyframes blip{0%,100%{opacity:.22;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}
+
+  /* counter bump */
+  @keyframes bump{0%{transform:translateY(0)}35%{transform:translateY(-4px);color:var(--accent)}100%{transform:translateY(0)}}
+  .stat .v.bump{animation:bump .42s ease}
+
+  /* progress bar shimmer */
+  .bar span{position:relative;overflow:hidden}
+  .bar span::after{
+    content:"";position:absolute;inset:0;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.6),transparent);
+    animation:shimmer 2.4s linear infinite;
+  }
+  @keyframes shimmer{from{transform:translateX(-100%)}to{transform:translateX(200%)}}
+
+  /* staggered groups */
+  @keyframes tileIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+  .stagger > *{opacity:0}
+  .stagger.in > *{animation:tileIn .55s cubic-bezier(.2,.7,.3,1) both}
+  .tile{transition:transform .22s ease,box-shadow .22s ease}
+  .tile:hover{transform:translateY(-4px);box-shadow:0 14px 30px -20px rgba(0,0,0,.45)}
+  .tile .mark{transition:transform .22s cubic-bezier(.2,1.4,.4,1)}
+  .tile:hover .mark{transform:scale(1.08) rotate(-3deg)}
+
+  /* heatmap cell wave */
+  @keyframes cellIn{from{opacity:0;transform:scale(.82)}to{opacity:1;transform:none}}
+  table.heat td{opacity:0;animation:cellIn .5s cubic-bezier(.2,.9,.3,1) both;animation-play-state:paused}
+  .panel.in table.heat td{animation-play-state:running}
+
+  /* live endpoint marker on the index chart */
+  .enddot{
+    position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;
+    background:var(--accent);opacity:0;transition:opacity .35s ease;pointer-events:none;
+  }
+  .enddot::before,.enddot::after{
+    content:"";position:absolute;inset:-1px;border-radius:50%;border:2px solid var(--accent);
+    animation:ring 2.1s ease-out infinite;
+  }
+  .enddot::after{animation-delay:1.05s}
+  @keyframes ring{0%{transform:scale(1);opacity:.65}100%{transform:scale(3.6);opacity:0}}
+
+  @media (max-width:1000px){
+    #routeCanvas{height:186px}
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .hero .chip,.hero h1,.hero .lede,.hero .index-card,.ribbon-card{animation:none}
+    .node.pulsing::after{animation:none}
+    .draw{transition:none;stroke-dasharray:none !important;stroke-dashoffset:0 !important}
+    .pop{opacity:1;transform:none;transition:none}
+    .livedot{animation:none;opacity:.85}
+    .stat .v.bump{animation:none}
+    .bar span::after{animation:none;display:none}
+    .stagger > *{opacity:1}
+    .stagger.in > *{animation:none}
+    .tile,.tile .mark{transition:none}
+    table.heat td{opacity:1;animation:none}
+    .enddot::before,.enddot::after{animation:none;opacity:0}
+    .sp span{transition:none}
+  }
+</style>
+</head>
+<body>
+
+<div class="sp" aria-hidden="true"><span id="spBar"></span></div>
+
+<!-- ============ HERO ============ -->
+<section class="hero">
+  <div class="wrap">
+    <div class="hero-grid">
+      <div>
+        <span class="chip"><span class="dot"></span>Prototype simulation · MoSPI problem statement</span>
+        <h1 style="margin-top:20px">APIx — Real-time Airfare Price Index</h1>
+        <p class="lede" style="margin-bottom:0">One number, every day, for what Indians actually pay to fly.</p>
+      </div>
+
+      <div class="index-card">
+        <div class="index-label">APIx today</div>
+        <div class="index-value" id="indexValue">0.0</div>
+        <div class="index-row">
+          <span class="delta">&#9650; 2.3% this week</span>
+          <span class="index-meta" id="indexDate">&mdash;</span>
+        </div>
+        <div class="index-base">Base Jan 2024 = 100 · 6 routes · 5 booking windows</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ROUTE RIBBON ============ -->
+<section id="routes" style="padding-top:0;border-top:0">
+  <div class="wrap">
+    <div class="ribbon-card">
+      <div class="ribbon-head">
+        <span class="ribbon-title">The basket</span>
+        <span class="ribbon-sub">6 trunk routes · 5 carriers · 5 booking windows</span>
+      </div>
+      <canvas id="routeCanvas" role="img" aria-label="Animated diagram of the six domestic routes tracked by the index"></canvas>
+    </div>
+  </div>
+</section>
+
+<!-- ============ THE PROBLEM ============ -->
+<section id="problem">
+  <div class="wrap">
+    <p class="eyebrow">The problem</p>
+    <h2>Airfares move every day.<br>Official prices are read once a month.</h2>
+
+    <div class="compare">
+      <div class="cmp-card drawin">
+        <div class="cmp-head">
+          <span class="t">What actually happens</span>
+          <span class="v">~30 price moves / month</span>
+        </div>
+        <svg viewBox="0 0 780 190" role="img" aria-label="Jagged line showing airfares changing every day">
+          <line x1="20" y1="170" x2="760" y2="170" stroke="#e3e3df" stroke-width="2"/>
+          <polyline class="draw" fill="none" stroke="#2f5fd0" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"
+            points="20,116 45,96 70,108 95,74 120,90 145,62 170,76 195,48 220,72 245,40 270,60 295,34 320,64 345,30 370,54 395,78 420,58 445,90 470,64 495,96 520,70 545,102 570,78 595,110 620,86 645,116 670,92 695,122 720,98 745,128 760,110"/>
+        </svg>
+        <p class="cmp-note">Daily fare quotes, all six trunk routes.</p>
+      </div>
+
+      <div class="cmp-card is-gap drawin">
+        <div class="cmp-head">
+          <span class="t">What the CPI sees</span>
+          <span class="v grey">1 reading / month</span>
+        </div>
+        <svg viewBox="0 0 780 190" role="img" aria-label="Flat stepped line showing one price reading per month">
+          <line x1="20" y1="170" x2="760" y2="170" stroke="#e3e3df" stroke-width="2"/>
+          <polyline class="draw" fill="none" stroke="#98a0aa" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"
+            points="20,96 265,96 265,72 510,72 510,88 760,88"/>
+          <circle class="pop" style="transition-delay:1.15s" cx="20" cy="96" r="9" fill="#98a0aa"/>
+          <circle class="pop" style="transition-delay:1.35s" cx="265" cy="72" r="9" fill="#98a0aa"/>
+          <circle class="pop" style="transition-delay:1.55s" cx="510" cy="88" r="9" fill="#98a0aa"/>
+          <circle class="pop" style="transition-delay:1.75s" cx="760" cy="88" r="9" fill="#98a0aa"/>
+        </svg>
+        <p class="cmp-note">Everything between the dots is invisible.</p>
+      </div>
+    </div>
+
+    <div class="why stagger">
+      <div class="why-card">
+        <div class="why-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l5-7 4 4 3-5 6 8"/></svg></div>
+        <h3>Fares swing hard</h3>
+        <p>A seat can cost 40% more in the same week — festivals, fuel, capacity cuts.</p>
+      </div>
+      <div class="why-card">
+        <div class="why-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><circle cx="12" cy="15" r="1.6" fill="currentColor"/></svg></div>
+        <h3>Sampled monthly</h3>
+        <p>Air travel enters the CPI through one collection round per month.</p>
+      </div>
+      <div class="why-card">
+        <div class="why-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5 22 20H2z"/><path d="M12 10v4.5M12 17.4v.1"/></svg></div>
+        <h3>Spikes arrive late</h3>
+        <p>By the time a surge shows up in the index, the quarter is already over.</p>
+      </div>
+    </div>
+
+    <div class="callout">APIx closes the gap: a daily, route-weighted, fully auditable airfare index — built from sanctioned data sources, not blocked scrapers.</div>
+  </div>
+</section>
+
+<!-- ============ THE SYSTEM ============ -->
+<section id="pipeline">
+  <div class="wrap">
+    <p class="eyebrow">The system</p>
+    <h2>From live fares to one index number</h2>
+    <p class="lede">Six stages, one scheduled run a day. Tap any stage.</p>
+
+    <div class="pipeline" id="pipe">
+      <button class="node" type="button" aria-expanded="false" aria-controls="stageDetail">
+        <svg class="glyph" width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.2 13.8 3 11.4l1.2-1.7 3.5.6 2.6-2.7L2 5.3 3.6 3l10.5 2.7 3.6-3.6a2 2 0 0 1 2.8 2.8l-3.6 3.6L20.6 19l-2.3 1.6-3.2-9.3-2.7 2.6.6 3.5-1.7 1.2z"/></svg>
+        <span><span class="n-title">Sources</span><span class="n-sub">Amadeus API + 1 scraper</span></span>
+      </button>
+      <div class="link" aria-hidden="true"><i class="pk" style="animation-delay:0s"></i><i class="pk" style="animation-delay:1.3s"></i></div>
+
+      <button class="node" type="button" aria-expanded="false" aria-controls="stageDetail">
+        <svg class="glyph" width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
+        <span><span class="n-title">Collect</span><span class="n-sub">scheduled · rate-limited</span></span>
+      </button>
+      <div class="link" aria-hidden="true"><i class="pk" style="animation-delay:.35s"></i><i class="pk" style="animation-delay:1.65s"></i></div>
+
+      <button class="node" type="button" aria-expanded="false" aria-controls="stageDetail">
+        <svg class="glyph" width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>
+        <span><span class="n-title">Clean</span><span class="n-sub">dedup · outliers</span></span>
+      </button>
+      <div class="link" aria-hidden="true"><i class="pk" style="animation-delay:.7s"></i><i class="pk" style="animation-delay:2s"></i></div>
+
+      <button class="node" type="button" aria-expanded="false" aria-controls="stageDetail">
+        <svg class="glyph" width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>
+        <span><span class="n-title">Store</span><span class="n-sub">raw → clean lineage</span></span>
+      </button>
+      <div class="link" aria-hidden="true"><i class="pk" style="animation-delay:1.05s"></i><i class="pk" style="animation-delay:2.35s"></i></div>
+
+      <button class="node" type="button" aria-expanded="false" aria-controls="stageDetail">
+        <svg class="glyph" width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3.2M12 18.3v3.2M2.5 12h3.2M18.3 12h3.2M5.2 5.2l2.3 2.3M16.5 16.5l2.3 2.3M18.8 5.2l-2.3 2.3M7.5 16.5l-2.3 2.3"/></svg>
+        <span><span class="n-title">Index</span><span class="n-sub">Laspeyres basket</span></span>
+      </button>
+      <div class="link" aria-hidden="true"><i class="pk" style="animation-delay:1.4s"></i><i class="pk" style="animation-delay:2.7s"></i></div>
+
+      <button class="node" type="button" aria-expanded="false" aria-controls="stageDetail">
+        <svg class="glyph" width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 15l3-4 3 3 4-6"/></svg>
+        <span><span class="n-title">Publish</span><span class="n-sub">dashboard + API</span></span>
+      </button>
+    </div>
+
+    <div class="stage-detail" id="stageDetail" role="region" aria-live="polite">
+      <h3 id="stageTitle">Sources</h3>
+      <p id="stageText">&nbsp;</p>
+      <div class="carriers" id="carriers"></div>
+      <p class="stage-hint" id="stageHint">Tap another stage to continue.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ COLLECTION ============ -->
+<section id="collector">
+  <div class="wrap">
+    <p class="eyebrow">Collection</p>
+    <h2>Every quote, logged and traceable</h2>
+
+    <div class="sim-grid">
+      <div class="terminal">
+        <div class="term-bar">
+          <span class="tdot"></span><span class="tdot"></span><span class="tdot"></span>
+          <span style="margin-left:8px">apix-collector · daily run</span><span class="livedot" aria-hidden="true"></span><span class="livelabel">simulated feed</span>
+        </div>
+        <div class="term-body" id="term"></div>
+      </div>
+
+      <div class="stat-stack">
+        <div class="stat">
+          <div class="k">Fares captured</div>
+          <div class="v" id="fareCount">0</div>
+          <div class="sub">6 routes × 5 carriers × 5 windows</div>
+          <div class="bar"><span id="fareBar"></span></div>
+        </div>
+        <div class="stat">
+          <div class="k">Held back</div>
+          <div class="v" id="rejCount">0</div>
+          <div class="sub">duplicates, sold-out, outliers</div>
+        </div>
+        <div class="stat">
+          <div class="k">Request rate</div>
+          <div class="v">1 / 6s</div>
+          <div class="sub">robots.txt checked before every run</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DASHBOARD ============ -->
+<section id="dashboard">
+  <div class="wrap">
+    <p class="eyebrow">The dashboard</p>
+    <h2>What MoSPI sees</h2>
+
+    <div class="panel reveal" data-chart="index" style="margin-top:34px">
+      <div class="panel-head">
+        <h3>APIx — last 30 days</h3>
+        <div class="srckey">
+          <span><i></i>collected</span>
+          <span><i class="dash"></i>simulated backfill</span>
+        </div>
+      </div>
+      <div class="chart-box"><canvas id="indexChart"></canvas><span class="enddot" id="endDot"></span></div>
+    </div>
+
+    <div class="dash-row">
+      <div class="panel reveal">
+        <div class="panel-head">
+          <h3>Route heatmap · 7 days</h3>
+          <span class="note">vs route mean</span>
+        </div>
+        <div class="heat-scroll"><table class="heat" id="heat"></table></div>
+        <div class="legend"><span>Cheaper</span><span class="sw" id="legendSw"></span><span>Costlier</span></div>
+      </div>
+
+      <div class="panel reveal" data-chart="lead">
+        <div class="panel-head">
+          <h3>Book early, pay less</h3>
+          <span class="note">mean fare by booking window</span>
+        </div>
+        <div class="chart-box short"><canvas id="leadChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ API ============ -->
+<section id="api">
+  <div class="wrap">
+    <p class="eyebrow">The output</p>
+    <h2>One endpoint for NSO and RBI</h2>
+
+    <div class="endpoint"><span class="verb">GET</span><span>/api/v1/index/daily</span></div>
+
+<pre class="code"><span class="k-punc">{</span>
+  <span class="k-key">"index"</span><span class="k-punc">:</span> <span class="k-str">"APIx"</span><span class="k-punc">,</span>          <span class="k-key">"date"</span><span class="k-punc">:</span> <span class="k-str">"2026-09-02"</span><span class="k-punc">,</span>
+  <span class="k-key">"value"</span><span class="k-punc">:</span> <span class="k-num">142.6</span><span class="k-punc">,</span>            <span class="k-key">"base_period"</span><span class="k-punc">:</span> <span class="k-str">"2024-01 = 100"</span><span class="k-punc">,</span>
+  <span class="k-key">"change"</span><span class="k-punc">: {</span> <span class="k-key">"wow_pct"</span><span class="k-punc">:</span> <span class="k-num">2.3</span><span class="k-punc">,</span> <span class="k-key">"yoy_pct"</span><span class="k-punc">:</span> <span class="k-num">9.8</span> <span class="k-punc">},</span>
+  <span class="k-key">"method"</span><span class="k-punc">:</span> <span class="k-str">"laspeyres_fixed_basket"</span><span class="k-punc">,</span>
+  <span class="k-key">"weights"</span><span class="k-punc">:</span> <span class="k-str">"dgca_traffic_share_2025"</span><span class="k-punc">,</span>
+  <span class="k-key">"source"</span><span class="k-punc">:</span> <span class="k-str">"amadeus"</span><span class="k-punc">,</span>       <span class="k-key">"simulated"</span><span class="k-punc">:</span> <span class="k-num">false</span><span class="k-punc">,</span>
+  <span class="k-key">"quotes_used"</span><span class="k-punc">:</span> <span class="k-num">1592</span><span class="k-punc">,</span>      <span class="k-key">"revision"</span><span class="k-punc">:</span> <span class="k-str">"final"</span>
+<span class="k-punc">}</span></pre>
+
+    <p class="small" style="margin-top:20px"><b>Every number carries its source.</b> Anything not collected is flagged <code style="font-family:var(--mono)">simulated: true</code> — in the API and on the chart.</p>
+  </div>
+</section>
+
+<!-- ============ STACK ============ -->
+<section id="stack">
+  <div class="wrap">
+    <p class="eyebrow">How we build it</p>
+    <h2>Real data, sanctioned sources, standard tools</h2>
+
+    <div class="stack-group">
+      <h3>Data sources</h3>
+      <div class="tiles stagger" id="tiles-data"></div>
+    </div>
+    <div class="stack-group">
+      <h3>Pipeline</h3>
+      <div class="tiles stagger" id="tiles-pipe"></div>
+    </div>
+    <div class="stack-group">
+      <h3>Delivery &amp; deployment</h3>
+      <div class="tiles stagger" id="tiles-ship"></div>
+    </div>
+
+    <p class="tiny muted" style="margin-top:26px">Official marks shown for the open-source and vendor tools; trademarks belong to their respective owners. Data-source tiles use plain text with generic icons — Government of India emblems are not reproduced.</p>
+  </div>
+</section>
+
+<!-- ============ COMPLIANCE ============ -->
+<section id="compliance">
+  <div class="wrap">
+    <p class="eyebrow">Why this one survives contact with reality</p>
+    <h2>Compliant by design</h2>
+
+    <div class="rules stagger">
+      <div class="rule">
+        <div class="ic"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.4 8-8 9-4.6-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg></div>
+        <div><h3>Sanctioned data, not blocked scrapers</h3><p>Fares come from an official flight-search API. No CAPTCHA bypass, no proxy rotation, no login walls.</p></div>
+      </div>
+      <div class="rule">
+        <div class="ic"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></div>
+        <div><h3>robots.txt + rate limits</h3><p>The one scraper we keep checks robots.txt before every run and waits six seconds between requests.</p></div>
+      </div>
+      <div class="rule">
+        <div class="ic"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/></svg></div>
+        <div><h3>Nothing faked silently</h3><p>Any value we did not collect is labelled simulated — on the chart, in the database, in the API response.</p></div>
+      </div>
+      <div class="rule">
+        <div class="ic"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19V5M4 19h16"/><path d="M8 15V9M13 15V7M18 15v-4"/></svg></div>
+        <div><h3>Backtested against DGCA</h3><p>The index is compared with official published fare data so an evaluator can check our work, not trust it.</p></div>
+      </div>
+    </div>
+
+    <div class="formula">
+      <div class="f">APIx(t) &nbsp;=&nbsp; 100 &nbsp;×&nbsp; &Sigma;<sub>r</sub> &nbsp;w<sub>r</sub> &nbsp;×&nbsp; ( P<sub>r</sub>(t) &nbsp;/&nbsp; P<sub>r</sub>(base) )</div>
+      <div class="lg">
+        <span><b>r</b> = route in the fixed basket</span>
+        <span><b>w</b> = DGCA passenger-traffic share</span>
+        <span><b>P</b> = mean fare across booking windows</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p><strong>Prototype simulation.</strong> This page demonstrates the architecture. Every figure shown here — the index level, the log, the charts and the API response — is generated in your browser for illustration and does not represent real airfares or any carrier's real prices. Airline names appear as plain text with generic icons only. Tool marks are shown for identification; all trademarks belong to their respective owners.</p>
+  </div>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  var REDUCED = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var ACCENT = "#2f5fd0", INK3 = "#767d87", LINE = "#e3e3df", GREY = "#98a0aa";
+
+  var ROUTES   = ["DEL–BOM","DEL–BLR","BOM–BLR","DEL–CCU","BLR–HYD","MAA–DEL"];
+  var CARRIERS = ["IndiGo","Air India","Akasa Air","SpiceJet","Air India Express"];
+  var TODAY_INDEX = 142.6;
+
+  function rnd(a,b){ return a + Math.random()*(b-a); }
+  function pick(a){ return a[Math.floor(Math.random()*a.length)]; }
+  function pad(n){ return n < 10 ? "0"+n : ""+n; }
+  function inr(n){ return "₹" + Math.round(n).toLocaleString("en-IN"); }
+
+  /* ---------- hero counter ---------- */
+  var elVal = document.getElementById("indexValue");
+  document.getElementById("indexDate").textContent =
+    new Date().toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"});
+
+  if (REDUCED){
+    elVal.textContent = TODAY_INDEX.toFixed(1);
+  } else {
+    var t0 = null, DUR = 1600;
+    requestAnimationFrame(function step(ts){
+      if (t0 === null) t0 = ts;
+      var p = Math.min(1,(ts - t0)/DUR);
+      elVal.textContent = (TODAY_INDEX * (1 - Math.pow(1 - p, 3))).toFixed(1);
+      if (p < 1) requestAnimationFrame(step);
+      else elVal.textContent = TODAY_INDEX.toFixed(1);
+    });
+  }
+
+  /* ---------- pipeline accordion ---------- */
+  var STAGES = [
+    { t:"Sources",
+      x:"Real fares from an official flight-search API, plus one small rate-limited scraper on a public page. Route weights come from DGCA traffic data on data.gov.in." },
+    { t:"Collect",
+      x:"A scheduler runs the full basket daily — six routes across five booking windows — with backoff on rate limits. Every raw response is stored before anything is touched." },
+    { t:"Clean",
+      x:"Duplicates collapsed, sold-out listings flagged rather than dropped, statistical outliers removed per route, and fares split into base and taxes where the source provides it." },
+    { t:"Store",
+      x:"Raw and clean tables sit side by side, so any published number can be traced back to the exact response it came from." },
+    { t:"Index",
+      x:"A Laspeyres fixed-basket calculation, weighted by DGCA passenger-traffic share and chain-linked monthly. The formula is published, not hidden." },
+    { t:"Publish",
+      x:"A dashboard and a versioned JSON endpoint, with the data source and simulated flag attached to every value." }
+  ];
+
+  var nodes = Array.prototype.slice.call(document.querySelectorAll(".node"));
+  var sTitle = document.getElementById("stageTitle");
+  var sText  = document.getElementById("stageText");
+  var sHint  = document.getElementById("stageHint");
+  var carriersBox = document.getElementById("carriers");
+
+  var PLANE = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.2 13.8 3 11.4l1.2-1.7 3.5.6 2.6-2.7L2 5.3 3.6 3l10.5 2.7 3.6-3.6a2 2 0 0 1 2.8 2.8l-3.6 3.6L20.6 19l-2.3 1.6-3.2-9.3-2.7 2.6.6 3.5-1.7 1.2z"/></svg>';
+  carriersBox.innerHTML = CARRIERS.map(function(c){ return '<span class="carrier">' + PLANE + c + '</span>'; }).join("");
+
+  function openStage(i){
+    for (var j=0;j<nodes.length;j++) nodes[j].setAttribute("aria-expanded", j===i ? "true" : "false");
+    sTitle.textContent = STAGES[i].t;
+    sText.textContent  = STAGES[i].x;
+    carriersBox.style.display = (i === 0) ? "flex" : "none";
+    sHint.textContent = (i === nodes.length - 1)
+      ? "End of pipeline — tap any stage to review it."
+      : "Tap another stage to continue.";
+  }
+  nodes.forEach(function(n,i){ n.addEventListener("click", function(){ openStage(i); }); });
+  openStage(0);
+
+  /* ---------- collection log ---------- */
+  var term = document.getElementById("term");
+  var elFare = document.getElementById("fareCount");
+  var elRej  = document.getElementById("rejCount");
+  var elBar  = document.getElementById("fareBar");
+  var TARGET = 1500, captured = 1247, setAside = 88;
+
+  var clock = new Date();
+  clock.setHours(12,4,3,0);
+
+  function makeLine(){
+    var route = pick(ROUTES), carrier = pick(CARRIERS);
+    var win   = [1,7,15,30,45][Math.floor(Math.random()*5)];
+    var base  = 3800 + ROUTES.indexOf(route)*240;
+    var price = base * (1 + (45 - win)/45 * 0.8) * rnd(0.9,1.12);
+
+    clock.setSeconds(clock.getSeconds() + Math.floor(rnd(2,9)));
+    var ts = "[" + pad(clock.getHours()) + ":" + pad(clock.getMinutes()) + ":" + pad(clock.getSeconds()) + "]";
+
+    var roll = Math.random(), ok = true, priceCell, tail;
+    if (roll < 0.07){
+      ok = false;
+      priceCell = '<span class="t-skip">&mdash;&mdash;</span>';
+      tail = '<span class="t-warn">! sold out</span>';
+    } else if (roll < 0.13){
+      ok = false;
+      priceCell = '<span class="t-skip">' + inr(price) + '</span>';
+      tail = '<span class="t-skip">~ duplicate</span>';
+    } else {
+      priceCell = '<span class="t-price">' + inr(price) + '</span>';
+      tail = '<span class="t-ok">✓ captured</span>';
+    }
+
+    return { ok: ok,
+      html: '<span class="t-time">' + ts + '</span> '
+          + '<span class="t-route">' + route + '</span> · '
+          + '<span class="t-carrier">' + carrier + '</span> · '
+          + priceCell + ' · '
+          + '<span class="t-carrier">T+' + win + '</span> ' + tail };
+  }
+
+  function bump(el){
+    if (REDUCED) return;
+    el.classList.remove("bump");
+    void el.offsetWidth;
+    el.classList.add("bump");
+  }
+
+  function render(){
+    var prevTxt = elFare.textContent;
+    elFare.textContent = captured.toLocaleString("en-IN");
+    if (prevTxt && prevTxt !== elFare.textContent) bump(elFare);
+    elRej.textContent  = setAside.toLocaleString("en-IN");
+    elBar.style.width  = Math.min(100, captured / TARGET * 100).toFixed(1) + "%";
+  }
+
+  function pushLine(){
+    var l = makeLine();
+    var div = document.createElement("div");
+    div.innerHTML = l.html;
+    term.appendChild(div);
+    while (term.children.length > 11) term.removeChild(term.firstChild);
+    if (l.ok) captured = Math.min(TARGET, captured + 1); else setAside += 1;
+    render();
+  }
+
+  for (var i=0;i<10;i++) pushLine();
+  if (!REDUCED) setInterval(function(){ if (!document.hidden) pushLine(); }, 1600);
+
+  /* ---------- tech stack tiles ---------- */
+  /* Official brand marks (Simple Icons, CC0). Trademarks belong to their owners. */
+  var BRAND = {
+    python: "M14.25.18l.9.2.73.26.59.3.45.32.34.34.25.34.16.33.1.3.04.26.02.2-.01.13V8.5l-.05.63-.13.55-.21.46-.26.38-.3.31-.33.25-.35.19-.35.14-.33.1-.3.07-.26.04-.21.02H8.77l-.69.05-.59.14-.5.22-.41.27-.33.32-.27.35-.2.36-.15.37-.1.35-.07.32-.04.27-.02.21v3.06H3.17l-.21-.03-.28-.07-.32-.12-.35-.18-.36-.26-.36-.36-.35-.46-.32-.59-.28-.73-.21-.88-.14-1.05-.05-1.23.06-1.22.16-1.04.24-.87.32-.71.36-.57.4-.44.42-.33.42-.24.4-.16.36-.1.32-.05.24-.01h.16l.06.01h8.16v-.83H6.18l-.01-2.75-.02-.37.05-.34.11-.31.17-.28.25-.26.31-.23.38-.2.44-.18.51-.15.58-.12.64-.1.71-.06.77-.04.84-.02 1.27.05zm-6.3 1.98l-.23.33-.08.41.08.41.23.34.33.22.41.09.41-.09.33-.22.23-.34.08-.41-.08-.41-.23-.33-.33-.22-.41-.09-.41.09zm13.09 3.95l.28.06.32.12.35.18.36.27.36.35.35.47.32.59.28.73.21.88.14 1.04.05 1.23-.06 1.23-.16 1.04-.24.86-.32.71-.36.57-.4.45-.42.33-.42.24-.4.16-.36.09-.32.05-.24.02-.16-.01h-8.22v.82h5.84l.01 2.76.02.36-.05.34-.11.31-.17.29-.25.25-.31.24-.38.2-.44.17-.51.15-.58.13-.64.09-.71.07-.77.04-.84.01-1.27-.04-1.07-.14-.9-.2-.73-.25-.59-.3-.45-.33-.34-.34-.25-.34-.16-.33-.1-.3-.04-.25-.02-.2.01-.13v-5.34l.05-.64.13-.54.21-.46.26-.38.3-.32.33-.24.35-.2.35-.14.33-.1.3-.06.26-.04.21-.02.13-.01h5.84l.69-.05.59-.14.5-.21.41-.28.33-.32.27-.35.2-.36.15-.36.1-.35.07-.32.04-.28.02-.21V6.07h2.09l.14.01zm-6.47 14.25l-.23.33-.08.41.08.41.23.33.33.23.41.08.41-.08.33-.23.23-.33.08-.41-.08-.41-.23-.33-.33-.23-.41-.08-.41.08z",
+    pandas: "M16.922 0h2.623v18.104h-2.623zm-4.126 12.94h2.623v2.57h-2.623zm0-7.037h2.623v5.446h-2.623zm0 11.197h2.623v5.446h-2.623zM4.456 5.896h2.622V24H4.455zm4.213 2.559h2.623v2.57H8.67zm0 4.151h2.623v5.447H8.67zm0-11.187h2.623v5.446H8.67Z",
+    postgresql: "M23.5594 14.7228a.5269.5269 0 0 0-.0563-.1191c-.139-.2632-.4768-.3418-1.0074-.2321-1.6533.3411-2.2935.1312-2.5256-.0191 1.342-2.0482 2.445-4.522 3.0411-6.8297.2714-1.0507.7982-3.5237.1222-4.7316a1.5641 1.5641 0 0 0-.1509-.235C21.6931.9086 19.8007.0248 17.5099.0005c-1.4947-.0158-2.7705.3461-3.1161.4794a9.449 9.449 0 0 0-.5159-.0816 8.044 8.044 0 0 0-1.3114-.1278c-1.1822-.0184-2.2038.2642-3.0498.8406-.8573-.3211-4.7888-1.645-7.2219.0788C.9359 2.1526.3086 3.8733.4302 6.3043c.0409.818.5069 3.334 1.2423 5.7436.4598 1.5065.9387 2.7019 1.4334 3.582.553.9942 1.1259 1.5933 1.7143 1.7895.4474.1491 1.1327.1441 1.8581-.7279.8012-.9635 1.5903-1.8258 1.9446-2.2069.4351.2355.9064.3625 1.39.3772a.0569.0569 0 0 0 .0004.0041 11.0312 11.0312 0 0 0-.2472.3054c-.3389.4302-.4094.5197-1.5002.7443-.3102.064-1.1344.2339-1.1464.8115-.0025.1224.0329.2309.0919.3268.2269.4231.9216.6097 1.015.6331 1.3345.3335 2.5044.092 3.3714-.6787-.017 2.231.0775 4.4174.3454 5.0874.2212.5529.7618 1.9045 2.4692 1.9043.2505 0 .5263-.0291.8296-.0941 1.7819-.3821 2.5557-1.1696 2.855-2.9059.1503-.8707.4016-2.8753.5388-4.1012.0169-.0703.0357-.1207.057-.1362.0007-.0005.0697-.0471.4272.0307a.3673.3673 0 0 0 .0443.0068l.2539.0223.0149.001c.8468.0384 1.9114-.1426 2.5312-.4308.6438-.2988 1.8057-1.0323 1.5951-1.6698zM2.371 11.8765c-.7435-2.4358-1.1779-4.8851-1.2123-5.5719-.1086-2.1714.4171-3.6829 1.5623-4.4927 1.8367-1.2986 4.8398-.5408 6.108-.13-.0032.0032-.0066.0061-.0098.0094-2.0238 2.044-1.9758 5.536-1.9708 5.7495-.0002.0823.0066.1989.0162.3593.0348.5873.0996 1.6804-.0735 2.9184-.1609 1.1504.1937 2.2764.9728 3.0892.0806.0841.1648.1631.2518.2374-.3468.3714-1.1004 1.1926-1.9025 2.1576-.5677.6825-.9597.5517-1.0886.5087-.3919-.1307-.813-.5871-1.2381-1.3223-.4796-.839-.9635-2.0317-1.4155-3.5126zm6.0072 5.0871c-.1711-.0428-.3271-.1132-.4322-.1772.0889-.0394.2374-.0902.4833-.1409 1.2833-.2641 1.4815-.4506 1.9143-1.0002.0992-.126.2116-.2687.3673-.4426a.3549.3549 0 0 0 .0737-.1298c.1708-.1513.2724-.1099.4369-.0417.156.0646.3078.26.3695.4752.0291.1016.0619.2945-.0452.4444-.9043 1.2658-2.2216 1.2494-3.1676 1.0128zm2.094-3.988-.0525.141c-.133.3566-.2567.6881-.3334 1.003-.6674-.0021-1.3168-.2872-1.8105-.8024-.6279-.6551-.9131-1.5664-.7825-2.5004.1828-1.3079.1153-2.4468.079-3.0586-.005-.0857-.0095-.1607-.0122-.2199.2957-.2621 1.6659-.9962 2.6429-.7724.4459.1022.7176.4057.8305.928.5846 2.7038.0774 3.8307-.3302 4.7363-.084.1866-.1633.3629-.2311.5454zm7.3637 4.5725c-.0169.1768-.0358.376-.0618.5959l-.146.4383a.3547.3547 0 0 0-.0182.1077c-.0059.4747-.054.6489-.115.8693-.0634.2292-.1353.4891-.1794 1.0575-.11 1.4143-.8782 2.2267-2.4172 2.5565-1.5155.3251-1.7843-.4968-2.0212-1.2217a6.5824 6.5824 0 0 0-.0769-.2266c-.2154-.5858-.1911-1.4119-.1574-2.5551.0165-.5612-.0249-1.9013-.3302-2.6462.0044-.2932.0106-.5909.019-.8918a.3529.3529 0 0 0-.0153-.1126 1.4927 1.4927 0 0 0-.0439-.208c-.1226-.4283-.4213-.7866-.7797-.9351-.1424-.059-.4038-.1672-.7178-.0869.067-.276.1831-.5875.309-.9249l.0529-.142c.0595-.16.134-.3257.213-.5012.4265-.9476 1.0106-2.2453.3766-5.1772-.2374-1.0981-1.0304-1.6343-2.2324-1.5098-.7207.0746-1.3799.3654-1.7088.5321a5.6716 5.6716 0 0 0-.1958.1041c.0918-1.1064.4386-3.1741 1.7357-4.4823a4.0306 4.0306 0 0 1 .3033-.276.3532.3532 0 0 0 .1447-.0644c.7524-.5706 1.6945-.8506 2.802-.8325.4091.0067.8017.0339 1.1742.081 1.939.3544 3.2439 1.4468 4.0359 2.3827.8143.9623 1.2552 1.9315 1.4312 2.4543-1.3232-.1346-2.2234.1268-2.6797.779-.9926 1.4189.543 4.1729 1.2811 5.4964.1353.2426.2522.4522.2889.5413.2403.5825.5515.9713.7787 1.2552.0696.087.1372.1714.1885.245-.4008.1155-1.1208.3825-1.0552 1.717-.0123.1563-.0423.4469-.0834.8148-.0461.2077-.0702.4603-.0994.7662zm.8905-1.6211c-.0405-.8316.2691-.9185.5967-1.0105a2.8566 2.8566 0 0 0 .135-.0406 1.202 1.202 0 0 0 .1342.103c.5703.3765 1.5823.4213 3.0068.1344-.2016.1769-.5189.3994-.9533.6011-.4098.1903-1.0957.333-1.7473.3636-.7197.0336-1.0859-.0807-1.1721-.151zm.5695-9.2712c-.0059.3508-.0542.6692-.1054 1.0017-.055.3576-.112.7274-.1264 1.1762-.0142.4368.0404.8909.0932 1.3301.1066.887.216 1.8003-.2075 2.7014a3.5272 3.5272 0 0 1-.1876-.3856c-.0527-.1276-.1669-.3326-.3251-.6162-.6156-1.1041-2.0574-3.6896-1.3193-4.7446.3795-.5427 1.3408-.5661 2.1781-.463zm.2284 7.0137a12.3762 12.3762 0 0 0-.0853-.1074l-.0355-.0444c.7262-1.1995.5842-2.3862.4578-3.4385-.0519-.4318-.1009-.8396-.0885-1.2226.0129-.4061.0666-.7543.1185-1.0911.0639-.415.1288-.8443.1109-1.3505.0134-.0531.0188-.1158.0118-.1902-.0457-.4855-.5999-1.938-1.7294-3.253-.6076-.7073-1.4896-1.4972-2.6889-2.0395.5251-.1066 1.2328-.2035 2.0244-.1859 2.0515.0456 3.6746.8135 4.8242 2.2824a.908.908 0 0 1 .0667.1002c.7231 1.3556-.2762 6.2751-2.9867 10.5405zm-8.8166-6.1162c-.025.1794-.3089.4225-.6211.4225a.5821.5821 0 0 1-.0809-.0056c-.1873-.026-.3765-.144-.5059-.3156-.0458-.0605-.1203-.178-.1055-.2844.0055-.0401.0261-.0985.0925-.1488.1182-.0894.3518-.1226.6096-.0867.3163.0441.6426.1938.6113.4186zm7.9305-.4114c.0111.0792-.049.201-.1531.3102-.0683.0717-.212.1961-.4079.2232a.5456.5456 0 0 1-.075.0052c-.2935 0-.5414-.2344-.5607-.3717-.024-.1765.2641-.3106.5611-.352.297-.0414.6111.0088.6356.1851z",
+    fastapi: "M12 .0387C5.3729.0384.0003 5.3931 0 11.9988c-.001 6.6066 5.372 11.9628 12 11.9625 6.628.0003 12.001-5.3559 12-11.9625-.0003-6.6057-5.3729-11.9604-12-11.96m-.829 5.4153h7.55l-7.5805 5.3284h5.1828L5.279 18.5436q2.9466-6.5444 5.892-13.0896",
+    chartdotjs: "M12 0L1.605 6v12L12 24l10.395-6V6zm0 1.41l9.172 5.295v10.59L12 22.59l-9.172-5.295V6.705zM5.902 8.334c-1.306 0-1.983.956-2.574 2.41v6.262L12 22.014l8.672-5.008v-5.971c-.447-.264-.894-.412-1.336-.412-4.275 0-3.97 4.885-6.717 5.8-2.748.917-3.511-8.089-6.717-8.089zm12.364.457c-2.9 0-2.137 4.732-5.342 4.732-1.63 0-2.52-1.317-3.477-1.981.148.326.3.655.442.98.467 1.068.922 2.09 1.379 2.734.228.322.455.541.644.644a.595.595 0 0 0 .549.05c.558-.187.968-.571 1.36-1.112.39-.541.74-1.228 1.154-1.916.413-.688.894-1.385 1.59-1.918.695-.534 1.607-.881 2.77-.881.465 0 .908.136 1.337.352v-.121c-.633-.849-1.348-1.563-2.406-1.563zm-6.68.152c-.868 0-1.491.82-2.076 2.06.094.055.192.106.277.167 1.06.761 1.798 1.853 3.137 1.853.678 0 1.067-.218 1.418-.585-.722-1.546-1.432-3.492-2.756-3.495Z",
+    docker: "M13.983 11.078h2.119a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.119a.185.185 0 00-.185.185v1.888c0 .102.083.185.185.185m-2.954-5.43h2.118a.186.186 0 00.186-.186V3.574a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m0 2.716h2.118a.187.187 0 00.186-.186V6.29a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.887c0 .102.082.185.185.186m-2.93 0h2.12a.186.186 0 00.184-.186V6.29a.185.185 0 00-.185-.185H8.1a.185.185 0 00-.185.185v1.887c0 .102.083.185.185.186m-2.964 0h2.119a.186.186 0 00.185-.186V6.29a.185.185 0 00-.185-.185H5.136a.186.186 0 00-.186.185v1.887c0 .102.084.185.186.186m5.893 2.715h2.118a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m-2.93 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.185v1.888c0 .102.083.185.185.185m-2.964 0h2.119a.185.185 0 00.185-.185V9.006a.185.185 0 00-.184-.186h-2.12a.186.186 0 00-.186.186v1.887c0 .102.084.185.186.185m-2.92 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.185v1.888c0 .102.082.185.185.185M23.763 9.89c-.065-.051-.672-.51-1.954-.51-.338.001-.676.03-1.01.087-.248-1.7-1.653-2.53-1.716-2.566l-.344-.199-.226.327c-.284.438-.49.922-.612 1.43-.23.97-.09 1.882.403 2.661-.595.332-1.55.413-1.744.42H.751a.751.751 0 00-.75.748 11.376 11.376 0 00.692 4.062c.545 1.428 1.355 2.48 2.41 3.124 1.18.723 3.1 1.137 5.275 1.137.983.003 1.963-.086 2.93-.266a12.248 12.248 0 003.823-1.389c.98-.567 1.86-1.288 2.61-2.136 1.252-1.418 1.998-2.997 2.553-4.4h.221c1.372 0 2.215-.549 2.68-1.009.309-.293.55-.65.707-1.046l.098-.288Z",
+    githubactions: "M10.984 13.836a.5.5 0 0 1-.353-.146l-.745-.743a.5.5 0 1 1 .706-.708l.392.391 1.181-1.18a.5.5 0 0 1 .708.707l-1.535 1.533a.504.504 0 0 1-.354.146zm9.353-.147l1.534-1.532a.5.5 0 0 0-.707-.707l-1.181 1.18-.392-.391a.5.5 0 1 0-.706.708l.746.743a.497.497 0 0 0 .706-.001zM4.527 7.452l2.557-1.585A1 1 0 0 0 7.09 4.17L4.533 2.56A1 1 0 0 0 3 3.406v3.196a1.001 1.001 0 0 0 1.527.85zm2.03-2.436L4 6.602V3.406l2.557 1.61zM24 12.5c0 1.93-1.57 3.5-3.5 3.5a3.503 3.503 0 0 1-3.46-3h-2.08a3.503 3.503 0 0 1-3.46 3 3.502 3.502 0 0 1-3.46-3h-.558c-.972 0-1.85-.399-2.482-1.042V17c0 1.654 1.346 3 3 3h.04c.244-1.693 1.7-3 3.46-3 1.93 0 3.5 1.57 3.5 3.5S13.43 24 11.5 24a3.502 3.502 0 0 1-3.46-3H8c-2.206 0-4-1.794-4-4V9.899A5.008 5.008 0 0 1 0 5c0-2.757 2.243-5 5-5s5 2.243 5 5a5.005 5.005 0 0 1-4.952 4.998A2.482 2.482 0 0 0 7.482 12h.558c.244-1.693 1.7-3 3.46-3a3.502 3.502 0 0 1 3.46 3h2.08a3.503 3.503 0 0 1 3.46-3c1.93 0 3.5 1.57 3.5 3.5zm-15 8c0 1.378 1.122 2.5 2.5 2.5s2.5-1.122 2.5-2.5-1.122-2.5-2.5-2.5S9 19.122 9 20.5zM5 9c2.206 0 4-1.794 4-4S7.206 1 5 1 1 2.794 1 5s1.794 4 4 4zm9 3.5c0-1.378-1.122-2.5-2.5-2.5S9 11.122 9 12.5s1.122 2.5 2.5 2.5 2.5-1.122 2.5-2.5zm9 0c0-1.378-1.122-2.5-2.5-2.5S18 11.122 18 12.5s1.122 2.5 2.5 2.5 2.5-1.122 2.5-2.5zm-13 8a.5.5 0 1 0 1 0 .5.5 0 0 0-1 0zm2 0a.5.5 0 1 0 1 0 .5.5 0 0 0-1 0zm12 0c0 1.93-1.57 3.5-3.5 3.5a3.503 3.503 0 0 1-3.46-3.002c-.007.001-.013.005-.021.005l-.506.017h-.017a.5.5 0 0 1-.016-.999l.506-.017c.018-.002.035.006.052.007A3.503 3.503 0 0 1 20.5 17c1.93 0 3.5 1.57 3.5 3.5zm-1 0c0-1.378-1.122-2.5-2.5-2.5S18 19.122 18 20.5s1.122 2.5 2.5 2.5 2.5-1.122 2.5-2.5z",
+    render: "M18.263.007c-3.121-.147-5.744 2.109-6.192 5.082-.018.138-.045.272-.067.405-.696 3.703-3.936 6.507-7.827 6.507-1.388 0-2.691-.356-3.825-.979a.2024.2024 0 0 0-.302.178V24H12v-8.999c0-1.656 1.338-3 2.987-3h2.988c3.382 0 6.103-2.817 5.97-6.244-.12-3.084-2.61-5.603-5.682-5.75",
+    pytest: "M2.6152 0v.8867h3.8399V0zm5.0215 0v.8867h3.8418V0zm4.957 0v.8867h3.8418V0zm4.9356 0v.8867h3.8418V0zM2.4473 1.8945a.935.935 0 0 0-.9356.9356c0 .517.4185.9375.9356.9375h19.1054c.5171 0 .9356-.4204.9356-.9375a.935.935 0 0 0-.9356-.9356zm.168 2.8477V24H6.455V4.7422zm5.0214 0V20.543h3.8418V4.7422zm4.957 0V15.291h3.8497V4.7422zm4.9356 0v6.4941h3.8418V4.7422z"
+  };
+
+  var ICONS = {
+    plane:'<path d="M10.2 13.8 3 11.4l1.2-1.7 3.5.6 2.6-2.7L2 5.3 3.6 3l10.5 2.7 3.6-3.6a2 2 0 0 1 2.8 2.8l-3.6 3.6L20.6 19l-2.3 1.6-3.2-9.3-2.7 2.6.6 3.5-1.7 1.2z"/>',
+    globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.6 2.6 15 0 18-2.6-3-2.6-15.4 0-18z"/>',
+    chart:'<path d="M4 19V5M4 19h16"/><path d="M8 15V9M13 15V7M18 15v-4"/>',
+    shield:'<path d="M12 3l8 3v6c0 5-3.4 8-8 9-4.6-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
+    code:'<path d="M8.5 8 4 12l4.5 4M15.5 8 20 12l-4.5 4"/>',
+    layers:'<path d="M12 3 3 8l9 5 9-5z"/><path d="M3 13l9 5 9-5"/>',
+    clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
+    db:'<ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
+    bolt:'<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+    pie:'<path d="M12 3a9 9 0 1 0 9 9h-9z"/><path d="M14.5 2.5A8 8 0 0 1 21.5 9.5h-7z"/>',
+    box:'<path d="M12 2.5 21 7v10l-9 4.5L3 17V7z"/><path d="M3 7l9 4.5L21 7M12 11.5V21"/>',
+    gear:'<circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3.2M12 18.3v3.2M2.5 12h3.2M18.3 12h3.2M5.2 5.2l2.3 2.3M16.5 16.5l2.3 2.3M18.8 5.2l-2.3 2.3M7.5 16.5l-2.3 2.3"/>',
+    cloud:'<path d="M7 18a4.5 4.5 0 0 1-.4-9A6 6 0 0 1 18 9.5a4.25 4.25 0 0 1-.5 8.5z"/>',
+    check:'<circle cx="12" cy="12" r="9"/><path d="M8 12.4l2.6 2.6L16 9.6"/>'
+  };
+
+  function mark(t){
+    if (t.b) return '<svg class="brandmark" width="30" height="30" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">'
+      + '<path d="' + BRAND[t.b] + '"/></svg>';
+    return '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+      + ICONS[t.i] + '</svg>';
+  }
+
+  function tile(t){
+    return '<div class="tile">'
+      + '<span class="mark" style="background:' + t.c + '">' + mark(t) + '</span>'
+      + '<span><span class="nm">' + t.n + '</span><span class="rl">' + t.r + '</span></span>'
+      + '</div>';
+  }
+
+  var DATA = [
+    { n:"Amadeus for Developers", r:"Live fares, 400+ airlines", c:"#005EB8", i:"plane" },
+    { n:"data.gov.in", r:"DGCA datasets, route weights", c:"#E2711D", i:"globe" },
+    { n:"MoSPI eSankhyiki", r:"CPI reference series", c:"#1F3A93", i:"chart" },
+    { n:"Compliant scraper", r:"One public page, rate-limited", c:"#5A6472", i:"shield" }
+  ];
+  var PIPE = [
+    { n:"Python", r:"Ingestion and cleaning", c:"#3776AB", b:"python" },
+    { n:"pandas", r:"Normalisation, outliers", c:"#150458", b:"pandas" },
+    { n:"APScheduler", r:"Daily collection runs", c:"#4B5563", i:"clock" },
+    { n:"PostgreSQL", r:"Raw and clean tables", c:"#336791", b:"postgresql" }
+  ];
+  var SHIP = [
+    { n:"FastAPI", r:"Versioned REST + OpenAPI", c:"#009688", b:"fastapi" },
+    { n:"Chart.js", r:"Dashboard visuals", c:"#FF6384", b:"chartdotjs" },
+    { n:"Docker", r:"Reproducible deploy", c:"#2496ED", b:"docker" },
+    { n:"GitHub Actions", r:"CI and scheduled runs", c:"#2088FF", b:"githubactions" },
+    { n:"Render", r:"Hosted live demo", c:"#0F9E7F", b:"render" },
+    { n:"pytest", r:"Cleaning + index tests", c:"#0A9EDC", b:"pytest" }
+  ];
+
+  document.getElementById("tiles-data").innerHTML = DATA.map(tile).join("");
+  document.getElementById("tiles-pipe").innerHTML = PIPE.map(tile).join("");
+  document.getElementById("tiles-ship").innerHTML = SHIP.map(tile).join("");
+
+  /* ---------- charts ---------- */
+  var built = {}, chartIndex = null, SPLIT = 16; // first 16 points = simulated backfill
+
+  function seriesIndex(){
+    var n = 30, out = new Array(n), labels = new Array(n), v = TODAY_INDEX, base = new Date();
+    for (var i = n - 1; i >= 0; i--){
+      out[i] = Math.round(v * 10) / 10;
+      var dd = new Date(base); dd.setDate(base.getDate() - (n - 1 - i));
+      labels[i] = dd.toLocaleDateString("en-IN",{day:"numeric",month:"short"});
+      v = v - rnd(0.05,0.45) + (Math.random() < 0.32 ? rnd(0,0.55) : 0);
+    }
+    return { labels: labels, data: out };
+  }
+
+  function placeEndDot(chart){
+    var dot = document.getElementById("endDot");
+    if (!dot || !chart) return;
+    try{
+      var meta = chart.getDatasetMeta(0);
+      var last = meta.data[meta.data.length - 1];
+      if (!last) return;
+      dot.style.left = last.x + "px";
+      dot.style.top  = last.y + "px";
+      dot.style.opacity = "1";
+    } catch(err){}
+  }
+
+  function buildIndexChart(){
+    if (typeof Chart === "undefined") return;
+    var s = seriesIndex(), cv = document.getElementById("indexChart");
+    var g = cv.getContext("2d").createLinearGradient(0,0,0,300);
+    g.addColorStop(0,"rgba(47,95,208,0.18)");
+    g.addColorStop(1,"rgba(47,95,208,0.00)");
+
+    chartIndex = new Chart(cv,{
+      type:"line",
+      data:{ labels:s.labels, datasets:[{
+        data:s.data, borderColor:ACCENT, borderWidth:3.5, backgroundColor:g, fill:true,
+        pointRadius:0, pointHoverRadius:6, pointHoverBackgroundColor:ACCENT, tension:0.35,
+        segment:{
+          borderColor: function(ctx){ return ctx.p0DataIndex < SPLIT ? GREY : ACCENT; },
+          borderDash:  function(ctx){ return ctx.p0DataIndex < SPLIT ? [8,6] : undefined; }
+        }
+      }]},
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        animation: REDUCED ? false : (function(){
+          var step = 1500 / 30;
+          function prevY(c){
+            return c.index === 0
+              ? c.chart.scales.y.getPixelForValue(s.data[0])
+              : c.chart.getDatasetMeta(c.datasetIndex).data[c.index - 1].getProps(["y"], true).y;
+          }
+          return {
+            x:{ type:"number", easing:"linear", duration:step, from:NaN,
+                delay:function(c){ if (c.type !== "data" || c.xStarted) return 0; c.xStarted = true; return c.index * step; } },
+            y:{ type:"number", easing:"linear", duration:step, from:prevY,
+                delay:function(c){ if (c.type !== "data" || c.yStarted) return 0; c.yStarted = true; return c.index * step; } }
+          };
+        })(),
+        interaction:{ mode:"index", intersect:false },
+        plugins:{ legend:{display:false}, tooltip:{
+          backgroundColor:"#191c22", padding:14, titleFont:{size:15}, bodyFont:{size:16}, displayColors:false,
+          callbacks:{ label:function(c){
+            return "APIx  " + c.parsed.y.toFixed(1) + (c.dataIndex < SPLIT ? "   (simulated)" : "   (collected)");
+          }}
+        }},
+        scales:{
+          x:{ grid:{display:false}, border:{color:LINE},
+              ticks:{ color:INK3, font:{size:15}, maxRotation:0, autoSkip:true, maxTicksLimit:8, padding:8 } },
+          y:{ grid:{color:LINE}, border:{display:false},
+              ticks:{ color:INK3, font:{size:15}, padding:10 } }
+        }
+      }
+    });
+
+    setTimeout(function(){ placeEndDot(chartIndex); }, REDUCED ? 60 : 1750);
+    var rt;
+    window.addEventListener("resize", function(){
+      clearTimeout(rt);
+      rt = setTimeout(function(){ placeEndDot(chartIndex); }, 220);
+    }, { passive:true });
+  }
+
+  function buildLeadChart(){
+    if (typeof Chart === "undefined") return;
+    var windows = [45,30,21,15,10,7,5,3,1];
+    var data = windows.map(function(w){
+      return Math.round((3600 + (45 - w) * 96 + Math.pow(Math.max(0, 14 - w), 2.05) * 30) * rnd(0.98,1.03));
+    });
+
+    new Chart(document.getElementById("leadChart"),{
+      type:"bar",
+      data:{ labels: windows.map(function(w){ return "T+" + w; }),
+             datasets:[{ data:data, backgroundColor:function(c){
+               return "rgba(47,95,208," + (0.28 + c.dataIndex/(windows.length-1)*0.62).toFixed(2) + ")";
+             }, borderRadius:6, borderSkipped:false, barPercentage:0.78 }]},
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        animation: REDUCED ? false : {
+          duration:650,
+          delay:function(c){ return (c.type === "data" && c.mode === "default") ? c.dataIndex * 75 : 0; }
+        },
+        plugins:{ legend:{display:false}, tooltip:{
+          backgroundColor:"#191c22", padding:14, titleFont:{size:15}, bodyFont:{size:16}, displayColors:false,
+          callbacks:{ label:function(c){ return "mean fare  " + inr(c.parsed.y); } }
+        }},
+        scales:{
+          x:{ grid:{display:false}, border:{color:LINE}, ticks:{ color:INK3, font:{size:15}, padding:6 } },
+          y:{ grid:{color:LINE}, border:{display:false},
+              ticks:{ color:INK3, font:{size:15}, padding:10,
+                      callback:function(v){ return "₹" + (v/1000).toFixed(1) + "k"; } } }
+        }
+      }
+    });
+  }
+
+  /* ---------- heatmap ---------- */
+  (function buildHeat(){
+    var tbl = document.getElementById("heat"), days = [], base = new Date();
+    for (var i = 6; i >= 0; i--){
+      var dd = new Date(base); dd.setDate(base.getDate() - i);
+      days.push(dd.toLocaleDateString("en-IN",{day:"numeric",month:"short"}));
+    }
+
+    var html = "<thead><tr><th class='rowh'>Route</th>";
+    for (var h = 0; h < days.length; h++) html += "<th>" + days[h] + "</th>";
+    html += "</tr></thead><tbody>";
+
+    ROUTES.forEach(function(r){
+      html += "<tr><th class='rowh'>" + r + "</th>";
+      var lvl = rnd(0.35,0.65);
+      for (var j = 0; j < 7; j++){
+        lvl = Math.min(0.97, Math.max(0.03, lvl + rnd(-0.22,0.24)));
+        var a = 0.07 + lvl * 0.72;
+        var col = lvl > 0.62 ? "#ffffff" : "#15181d";
+        var pct = ((lvl - 0.5) * 36).toFixed(0);
+        var label = (pct > 0 ? "+" : "") + pct + "%";
+        html += '<td style="background:rgba(47,95,208,' + a.toFixed(3) + ');color:' + col
+              + ';animation-delay:' + (140 + (j * 6 + ROUTES.indexOf(r)) * 26) + 'ms" '
+              + 'title="' + r + ' · ' + days[j] + ' · ' + label + ' vs route mean">' + label + "</td>";
+      }
+      html += "</tr>";
+    });
+    tbl.innerHTML = html + "</tbody>";
+
+    var sw = document.getElementById("legendSw");
+    [0.07,0.22,0.37,0.52,0.66,0.79].forEach(function(a){
+      var i = document.createElement("i");
+      i.style.background = "rgba(47,95,208," + a + ")";
+      sw.appendChild(i);
+    });
+  })();
+
+  /* ---------- scroll progress ---------- */
+  (function(){
+    var bar = document.getElementById("spBar");
+    if (!bar) return;
+    var ticking = false;
+    function update(){
+      var h = document.documentElement.scrollHeight - window.innerHeight;
+      bar.style.width = (h > 0 ? Math.min(100, window.scrollY / h * 100) : 0) + "%";
+      ticking = false;
+    }
+    window.addEventListener("scroll", function(){
+      if (!ticking){ ticking = true; requestAnimationFrame(update); }
+    }, { passive:true });
+    update();
+  })();
+
+  /* ---------- animated route ribbon ---------- */
+  (function(){
+    var cv = document.getElementById("routeCanvas");
+    if (!cv || !cv.getContext) return;
+    var ctx = cv.getContext("2d");
+
+    var CITY = ["DEL","BOM","BLR","CCU","HYD","MAA"];
+    var PAIR = [[0,1],[0,2],[1,2],[0,3],[2,4],[5,0]];
+
+    var W = 0, H = 0, pts = [], arcs = [], planes = [], rings = [], raf = null, visible = true;
+
+    function resize(){
+      var r = cv.getBoundingClientRect();
+      if (!r.width) return;
+      var dpr = Math.min(window.devicePixelRatio || 1, 2);
+      W = r.width; H = r.height;
+      cv.width = Math.round(W * dpr);
+      cv.height = Math.round(H * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      var pad = Math.max(42, W * 0.055), baseY = H - 44;
+      pts = CITY.map(function(name, i){
+        return { x: pad + i * ((W - pad * 2) / (CITY.length - 1)), y: baseY, name: name };
+      });
+
+      arcs = PAIR.map(function(p){
+        var a = pts[p[0]], b = pts[p[1]];
+        var span = Math.abs(b.x - a.x);
+        var lift = Math.min(H - 78, 34 + span * 0.42);
+        return { a:a, b:b, cx:(a.x + b.x) / 2, cy: baseY - lift };
+      });
+    }
+
+    function at(arc, t){
+      var u = 1 - t;
+      return {
+        x: u*u*arc.a.x + 2*u*t*arc.cx + t*t*arc.b.x,
+        y: u*u*arc.a.y + 2*u*t*arc.cy + t*t*arc.b.y
+      };
+    }
+
+    function spawn(){
+      if (planes.length > 9 || !arcs.length) return;
+      var i = Math.floor(Math.random() * arcs.length);
+      planes.push({ i:i, t:0, sp: 0.0022 + Math.random() * 0.0026, dir: Math.random() < 0.5 ? 1 : -1 });
+    }
+
+    function frame(){
+      raf = requestAnimationFrame(frame);
+      if (!visible || document.hidden || !W) return;
+
+      ctx.clearRect(0, 0, W, H);
+
+      /* baseline */
+      ctx.strokeStyle = "rgba(47,95,208,0.10)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x - 22, pts[0].y);
+      ctx.lineTo(pts[pts.length-1].x + 22, pts[0].y);
+      ctx.stroke();
+
+      /* arcs */
+      ctx.strokeStyle = "rgba(47,95,208,0.20)";
+      ctx.lineWidth = 1.6;
+      arcs.forEach(function(arc){
+        ctx.beginPath();
+        ctx.moveTo(arc.a.x, arc.a.y);
+        ctx.quadraticCurveTo(arc.cx, arc.cy, arc.b.x, arc.b.y);
+        ctx.stroke();
+      });
+
+      /* aircraft with comet trails */
+      for (var k = planes.length - 1; k >= 0; k--){
+        var p = planes[k];
+        p.t += p.sp;
+        if (p.t >= 1){
+          var arcEnd = arcs[p.i];
+          var end = p.dir === 1 ? arcEnd.b : arcEnd.a;
+          rings.push({ x:end.x, y:end.y, r:5, a:0.55 });
+          planes.splice(k, 1);
+          continue;
+        }
+        var arc = arcs[p.i];
+        if (!arc){ planes.splice(k,1); continue; }
+        var tt = p.dir === 1 ? p.t : 1 - p.t;
+        for (var s = 9; s >= 0; s--){
+          var ts = tt - (p.dir * s * 0.011);
+          if (ts < 0 || ts > 1) continue;
+          var q = at(arc, ts);
+          var fade = (1 - s / 10);
+          ctx.beginPath();
+          ctx.arc(q.x, q.y, 1.1 + fade * 3.1, 0, Math.PI * 2);
+          ctx.fillStyle = "rgba(47,95,208," + (fade * fade * 0.85).toFixed(3) + ")";
+          ctx.fill();
+        }
+      }
+
+      /* arrival rings */
+      for (var m = rings.length - 1; m >= 0; m--){
+        var g = rings[m];
+        g.r += 0.85; g.a -= 0.016;
+        if (g.a <= 0){ rings.splice(m, 1); continue; }
+        ctx.beginPath();
+        ctx.arc(g.x, g.y, g.r, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(47,95,208," + g.a.toFixed(3) + ")";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      /* airports */
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      ctx.font = "600 14px ui-monospace,SFMono-Regular,Consolas,monospace";
+      pts.forEach(function(pt){
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, 5.5, 0, Math.PI * 2);
+        ctx.fillStyle = "#2f5fd0";
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, 9.5, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(47,95,208,0.28)";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.fillStyle = "#767d87";
+        ctx.fillText(pt.name, pt.x, pt.y + 17);
+      });
+    }
+
+    resize();
+    window.addEventListener("resize", function(){ resize(); }, { passive:true });
+
+    if (REDUCED){
+      /* one still frame: arcs and airports, no motion */
+      planes = [];
+      frame();
+      cancelAnimationFrame(raf);
+      raf = null;
+      return;
+    }
+
+    for (var n = 0; n < 4; n++) spawn();
+    setInterval(function(){ if (!document.hidden && visible) spawn(); }, 900);
+
+    if ("IntersectionObserver" in window){
+      new IntersectionObserver(function(es){
+        visible = es[0].isIntersecting;
+      }, { threshold: 0 }).observe(cv);
+    }
+    frame();
+  })();
+
+  /* ---------- pipeline: a pulse walking the chain ---------- */
+  if (!REDUCED){
+    var walk = 0;
+    setInterval(function(){
+      if (document.hidden) return;
+      var n = nodes[walk % nodes.length];
+      n.classList.add("pulsing");
+      setTimeout(function(){ n.classList.remove("pulsing"); }, 660);
+      walk++;
+    }, 700);
+  }
+
+  /* ---------- draw-on setup for the comparison graphics ---------- */
+  if (!REDUCED){
+    Array.prototype.forEach.call(document.querySelectorAll(".draw"), function(p){
+      try{
+        var L = p.getTotalLength();
+        p.style.strokeDasharray = L + " " + L;
+        p.style.strokeDashoffset = L;
+      } catch(err){}
+    });
+  }
+
+  /* ---------- stagger delays ---------- */
+  Array.prototype.forEach.call(document.querySelectorAll(".stagger"), function(g){
+    Array.prototype.forEach.call(g.children, function(ch, i){
+      ch.style.animationDelay = (i * 70) + "ms";
+    });
+  });
+
+  /* ---------- reveal + lazy build ---------- */
+  function build(name){
+    if (built[name]) return;
+    built[name] = true;
+    if (name === "index") buildIndexChart();
+    if (name === "lead")  buildLeadChart();
+  }
+
+  var reveals = Array.prototype.slice.call(document.querySelectorAll(".reveal,.stagger,.drawin"));
+  if ("IntersectionObserver" in window){
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if (!e.isIntersecting) return;
+        e.target.classList.add("in");
+        if (e.target.classList.contains("drawin")){
+          Array.prototype.forEach.call(e.target.querySelectorAll(".draw"), function(p){
+            p.style.strokeDashoffset = "0";
+          });
+        }
+        var c = e.target.getAttribute("data-chart");
+        if (c) build(c);
+        io.unobserve(e.target);
+      });
+    }, { threshold: 0.12 });
+    reveals.forEach(function(el){ io.observe(el); });
+  } else {
+    reveals.forEach(function(el){ el.classList.add("in"); });
+    build("index"); build("lead");
+  }
+})();
+</script>
+</body>
+</html>
